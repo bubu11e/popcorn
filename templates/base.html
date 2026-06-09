@@ -1,0 +1,43 @@
+{{/* SPDX-License-Identifier: GPL-3.0-or-later */}}
+{{/* Copyright (c) 2024-2026 Julien Girard */}}
+{{define "base"}}<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#444cf7">
+    <meta name="description" content="Les séances de cinéma de la semaine, près de chez vous.">
+    <link rel="preload" href="/static/font/Raleway-Black.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="stylesheet" href="/static/css/main.css?v={{.assetVer}}">
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link rel="apple-touch-icon" href="/static/images/favicon.svg">
+    <title>🍿 Popcorn</title>
+</head>
+<body id="top">
+    <header class="topbar">
+        <div class="shell topbar__row">
+            <h1 class="brand">
+                <a class="brand__link" href="/" aria-label="Popcorn, accueil">
+                    <span class="brand__name">Popcorn</span>
+                    <span class="brand__corn" aria-hidden="true">🍿</span>
+                </a>
+            </h1>
+            <p class="slogan">Quand tout fout le camp, il reste le grand écran… et le pop-corn.</p>
+        </div>
+    </header>
+
+    {{block "body" .}}{{end}}
+
+    <footer class="footer">
+        <div class="shell">
+            <p class="footer__line">
+                Données fournies par allociné. Projet open source sous licence GPLv3,
+                inspiré de
+                <a href="https://github.com/solene-drnx/grainParisArt-Public" rel="noopener">grainParisArt</a>.
+            </p>
+        </div>
+    </footer>
+</body>
+</html>
+{{end}}

@@ -1,0 +1,31 @@
+---
+# Popcorn configuration.
+# Copy to config.yaml and adjust. Every scalar can also be overridden at runtime
+# via POPCORN_* environment variables (see docs/configuration.md).
+
+# Cinemas to aggregate. internal_id is the allocine.fr theater id; name is the
+# label shown in the UI. Both are required.
+theaters:
+  - internal_id: C0159
+    name: UGC Ciné Cité Les Halles
+  - internal_id: C0026
+    name: UGC Ciné Cité Bercy
+  - internal_id: C2954
+    name: MK2 Bibliothèque
+  - internal_id: C0179
+    name: Pathé Wepler
+
+server:
+  host: 0.0.0.0        # POPCORN_HOST
+  port: 5000           # POPCORN_PORT
+
+refresh:
+  interval: 3h         # POPCORN_REFRESH_INTERVAL (Go duration: 90m, 6h, ...)
+  days: 7              # POPCORN_REFRESH_DAYS (size of the rolling window)
+
+allocine:
+  base_url: https://www.allocine.fr   # POPCORN_ALLOCINE_BASE_URL
+  timeout: 10s                        # per-request HTTP timeout
+  max_retries: 3                      # extra attempts on 5xx / transport errors
+
+log_level: info        # POPCORN_LOG_LEVEL (debug, info, warn, error)

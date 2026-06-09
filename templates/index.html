@@ -1,0 +1,166 @@
+{{/* SPDX-License-Identifier: GPL-3.0-or-later */}}
+{{/* Copyright (c) 2024-2026 Julien Girard */}}
+{{define "body"}}
+<main class="shell main">
+    <nav class="days" aria-label="Choisir un jour">
+        <div class="days__strip">
+        {{range .dates}}
+            <a class="day{{if .Choisi}} day--on{{end}}"
+               href="/?delta={{.Index}}"
+               data-day="{{.Index}}"
+               {{if .Choisi}}aria-current="date"{{end}}>
+                <span class="day__name">{{.Jour}}</span>
+                <span class="day__num">{{.Chiffre}}</span>
+                <span class="day__month">{{.Mois}}</span>
+            </a>
+        {{end}}
+        </div>
+    </nav>
+
+    {{if .genres}}
+    <nav class="filters" aria-label="Filtrer par genre">
+        <div class="filters__strip">
+            <button type="button" class="filter filter--on" data-genre="" aria-pressed="true">Tous</button>
+            {{range .genres}}
+            <button type="button" class="filter" data-genre="{{.Slug}}" aria-pressed="false">{{.Label}}</button>
+            {{end}}
+        </div>
+    </nav>
+    {{end}}
+
+    {{range $i, $day := .days}}
+    <section class="sched" data-day="{{$i}}"{{if ne $i $.selected}} hidden{{end}}>
+        {{if $day}}
+        <ul class="films">
+            {{range $day}}
+            <li class="film" data-genres="{{genreSlugs .Genres}}">
+                <a class="film__art" href="{{.URL}}" target="_blank" rel="noopener">
+                    <img src="{{.Affiche}}" alt="Affiche de {{.Title}}"
+                         loading="lazy" decoding="async" width="300" height="450">
+                </a>
+                <div class="film__info">
+                    <h2 class="film__title">
+                        <a href="{{.URL}}" target="_blank" rel="noopener">{{.Title}}</a>
+                    </h2>
+                    {{if .VOTitle}}<p class="film__vo">{{.VOTitle}}</p>{{end}}
+                    <p class="film__meta">{{.Director}}{{if .Duree}} &middot; {{.Duree}}{{end}}</p>
+                    {{if .Genres}}<p class="film__tags">{{joinComma .Genres}}</p>{{end}}
+                    {{if .Trailer}}
+                    <a class="film__trailer" href="{{.Trailer}}" target="_blank" rel="noopener">
+                        <span class="film__trailer-play" aria-hidden="true">&#9654;</span> Bande-annonce
+                    </a>
+                    {{end}}
+                    {{if .Synopsis}}<p class="film__pitch">{{.Synopsis}}</p>{{end}}
+                    <div class="film__screenings">
+                        {{range .Seances}}
+                        <div class="screening">
+                            <span class="screening__where">{{.Cinema}}</span>
+                            <div class="screening__slots">
+                                {{range .Horaires}}<span class="slot">{{.}}</span>{{end}}
+                            </div>
+                        </div>
+                        {{end}}
+                    </div>
+                </div>
+            </li>
+            {{end}}
+        </ul>
+        <p class="blank blank--filtered" hidden>Aucun film de ce genre ce jour-là.</p>
+        {{else}}
+        <p class="blank">Aucune séance prévue ce jour-là. Reviens plus tard !</p>
+        {{end}}
+    </section>
+    {{end}}
+</main>
+
+<a href="#top" class="totop" aria-label="Revenir en haut"><span aria-hidden="true">🍿</span></a>
+
+<script>
+    (function () {
+        var days = Array.prototype.slice.call(document.querySelectorAll('.day'));
+        var panels = Array.prototype.slice.call(document.querySelectorAll('.sched'));
+        var filters = Array.prototype.slice.call(document.querySelectorAll('.filter'));
+        var genre = '';
+
+        // Keep the URL in step with the visible day and active genre so the view
+        // stays shareable and the browser's Back/Forward restore both axes.
+        function pushURL(day) {
+            var qs = 'delta=' + day;
+            if (genre) { qs += '&genre=' + encodeURIComponent(genre); }
+            history.pushState({ day: day, genre: genre }, '', '?' + qs);
+        }
+
+        // Hide every film that does not carry the active genre. The "no match"
+        // note shows only when the filter empties an otherwise non-empty day.
+        function filterPanel(panel) {
+            var films = panel.querySelectorAll('.film');
+            var shown = 0;
+            Array.prototype.forEach.call(films, function (film) {
+                var tags = (film.dataset.genres || '').split(' ');
+                var keep = !genre || tags.indexOf(genre) !== -1;
+                film.hidden = !keep;
+                if (keep) { shown++; }
+            });
+            var note = panel.querySelector('.blank--filtered');
+            if (note) { note.hidden = !(films.length && shown === 0); }
+        }
+
+        function applyFilter() {
+            panels.forEach(filterPanel);
+            filters.forEach(function (b) {
+                var on = b.dataset.genre === genre;
+                b.classList.toggle('filter--on', on);
+                b.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+        }
+
+        function visibleDay() {
+            for (var i = 0; i < panels.length; i++) {
+                if (!panels[i].hidden) { return panels[i].dataset.day; }
+            }
+            return '0';
+        }
+
+        function showDay(day) {
+            day = String(day);
+            panels.forEach(function (p) { p.hidden = p.dataset.day !== day; });
+            days.forEach(function (d) {
+                var on = d.dataset.day === day;
+                d.classList.toggle('day--on', on);
+                if (on) { d.setAttribute('aria-current', 'date'); }
+                else { d.removeAttribute('aria-current'); }
+            });
+            applyFilter();
+        }
+
+        days.forEach(function (d) {
+            d.addEventListener('click', function (e) {
+                e.preventDefault();
+                showDay(d.dataset.day);
+                pushURL(d.dataset.day);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        });
+
+        filters.forEach(function (b) {
+            b.addEventListener('click', function () {
+                genre = b.dataset.genre;
+                applyFilter();
+                pushURL(visibleDay());
+            });
+        });
+
+        window.addEventListener('popstate', function () {
+            var params = new URLSearchParams(location.search);
+            var day = parseInt(params.get('delta') || '0', 10);
+            genre = params.get('genre') || '';
+            showDay(isNaN(day) ? 0 : day);
+        });
+
+        // The server already selected the day via ?delta=, so on load only the
+        // genre filter needs replaying from the URL.
+        genre = new URLSearchParams(location.search).get('genre') || '';
+        applyFilter();
+    })();
+</script>
+{{end}}

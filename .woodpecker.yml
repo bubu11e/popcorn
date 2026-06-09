@@ -1,0 +1,31 @@
+---
+when:
+  event: [push, manual]
+
+steps:
+  - name: pre-commit
+    image: docker-registry.home.mpli.fr/pre-commit:latest
+    pull: true
+    commands:
+      - pre-commit run --all-files
+
+  - name: test
+    image: golang:1.26
+    commands:
+      - go mod tidy -diff
+      - go test -race ./...
+
+  - name: publish
+    image: woodpeckerci/plugin-docker-buildx
+    settings:
+      repo:
+        from_secret: docker_repo
+      registry:
+        from_secret: docker_registry
+      username:
+        from_secret: docker_registry_username
+      password:
+        from_secret: docker_registry_password
+      tag: latest
+    when:
+      branch: main

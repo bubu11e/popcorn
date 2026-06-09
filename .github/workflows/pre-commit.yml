@@ -1,0 +1,25 @@
+---
+# Public CI for the GitHub mirror: runs pre-commit on external pull requests so
+# outside contributions are validated without access to the canonical Forgejo
+# pipeline. Build and publish stay on Woodpecker (see .woodpecker.yml).
+name: pre-commit
+
+# Quoted to stop yamllint's truthy rule from reading the key as a boolean.
+"on":
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - uses: pre-commit/action@v3.0.1

@@ -1,0 +1,15 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Copyright (c) 2024-2026 Julien Girard -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 450" role="img"
+     aria-label="Affiche indisponible">
+  <rect width="300" height="450" fill="#eef0f8"/>
+  <g fill="none" stroke="#b9c0d6" stroke-width="6" stroke-linejoin="round">
+    <rect x="96" y="150" width="108" height="120" rx="10"/>
+    <path d="M96 186 H204" stroke-width="4"/>
+    <circle cx="150" cy="228" r="20"/>
+  </g>
+  <text x="150" y="330" text-anchor="middle" font-family="system-ui, sans-serif"
+        font-size="20" font-weight="700" fill="#8b93ab">🍿</text>
+  <text x="150" y="362" text-anchor="middle" font-family="system-ui, sans-serif"
+        font-size="15" fill="#8b93ab">Affiche indisponible</text>
+</svg>
