@@ -139,6 +139,60 @@ func TestValidationErrors(t *testing.T) {
 	}
 }
 
+func TestPushDefaultsDisabled(t *testing.T) {
+	cfg, err := Load(writeConfig(t, validYAML))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Push.Enabled() {
+		t.Error("push must be disabled when no VAPID keys are configured")
+	}
+	if cfg.Push.SubscriptionsFile != "subscriptions.json" {
+		t.Errorf("subscriptions_file default = %q", cfg.Push.SubscriptionsFile)
+	}
+}
+
+func TestPushEnabledViaEnv(t *testing.T) {
+	path := writeConfig(t, validYAML)
+	t.Setenv("POPCORN_VAPID_PUBLIC_KEY", "pub")
+	t.Setenv("POPCORN_VAPID_PRIVATE_KEY", "priv")
+	t.Setenv("POPCORN_VAPID_SUBJECT", "mailto:test@example.com")
+	t.Setenv("POPCORN_PUSH_SUBSCRIPTIONS_FILE", "/data/subs.json")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.Push.Enabled() {
+		t.Fatal("push should be enabled when both keys are set via env")
+	}
+	if cfg.Push.SubscriptionsFile != "/data/subs.json" {
+		t.Errorf("subscriptions_file = %q, want env override", cfg.Push.SubscriptionsFile)
+	}
+}
+
+func TestPushValidationErrors(t *testing.T) {
+	cases := map[string]map[string]string{
+		"only public key":  {"POPCORN_VAPID_PUBLIC_KEY": "pub"},
+		"only private key": {"POPCORN_VAPID_PRIVATE_KEY": "priv"},
+		"keys without subject": {
+			"POPCORN_VAPID_PUBLIC_KEY":  "pub",
+			"POPCORN_VAPID_PRIVATE_KEY": "priv",
+		},
+	}
+	for name, env := range cases {
+		t.Run(name, func(t *testing.T) {
+			path := writeConfig(t, validYAML)
+			for k, v := range env {
+				t.Setenv(k, v)
+			}
+			if _, err := Load(path); err == nil {
+				t.Fatalf("expected validation error for %q", name)
+			}
+		})
+	}
+}
+
 func TestLoadMissingFile(t *testing.T) {
 	if _, err := Load("/nonexistent/path/config.yaml"); err == nil {
 		t.Fatal("expected error for missing file")

@@ -25,6 +25,9 @@
                 </a>
             </h1>
             <p class="slogan">Quand tout fout le camp, il reste le grand écran… et le pop-corn.</p>
+            {{if .pushEnabled}}
+            <button type="button" id="notify-btn" class="notify" hidden>🔔 Activer les notifications</button>
+            {{end}}
         </div>
     </header>
 

@@ -28,4 +28,14 @@ allocine:
   timeout: 10s                        # per-request HTTP timeout
   max_retries: 3                      # extra attempts on 5xx / transport errors
 
+# Web Push notifications for newly-released movies. Disabled until both VAPID
+# keys are set. Generate a pair with: go run . -genvapid
+# Keys are secrets: prefer the POPCORN_VAPID_* env vars over committing them here.
+# Requires HTTPS in production (service workers need a secure context).
+push:
+  subject: ""                          # POPCORN_VAPID_SUBJECT (e.g. mailto:you@example.com)
+  public_key: ""                       # POPCORN_VAPID_PUBLIC_KEY
+  private_key: ""                      # POPCORN_VAPID_PRIVATE_KEY (secret)
+  subscriptions_file: subscriptions.json  # POPCORN_PUSH_SUBSCRIPTIONS_FILE
+
 log_level: info        # POPCORN_LOG_LEVEL (debug, info, warn, error)

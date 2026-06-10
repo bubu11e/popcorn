@@ -23,9 +23,15 @@ Start from [`config.example.yaml`](../config.example.yaml).
 | `allocine.base_url`   | `POPCORN_ALLOCINE_BASE_URL`  | `https://www.allocine.fr`   | Upstream base URL (override for testing).                |
 | `allocine.timeout`    | (file only)                        | `10s`                       | Per-request HTTP timeout.                                |
 | `allocine.max_retries`| (file only)                        | `3`                         | Extra attempts on 5xx / transport errors.                |
+| `push.subject`        | `POPCORN_VAPID_SUBJECT`      | —                           | VAPID contact (e.g. `mailto:you@example.com`). Required when push is on. |
+| `push.public_key`     | `POPCORN_VAPID_PUBLIC_KEY`   | —                           | VAPID public key. Push is enabled only when both keys are set. |
+| `push.private_key`    | `POPCORN_VAPID_PRIVATE_KEY`  | —                           | VAPID private key (secret — prefer the env var).         |
+| `push.subscriptions_file` | `POPCORN_PUSH_SUBSCRIPTIONS_FILE` | `subscriptions.json` | Where push subscriptions are persisted.             |
 | `log_level`           | `POPCORN_LOG_LEVEL`          | `info`                      | `debug`, `info`, `warn`, or `error`.                     |
 
 Theaters are file-only because a list is awkward to express in a single env variable.
+Push is disabled until both VAPID keys are set; see
+[push-notifications.md](push-notifications.md) for setup.
 
 ## Examples
 

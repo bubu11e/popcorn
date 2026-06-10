@@ -20,6 +20,7 @@ type Config struct {
 	Server   Server    `yaml:"server"`
 	Refresh  Refresh   `yaml:"refresh"`
 	Allocine Allocine  `yaml:"allocine"`
+	Push     Push      `yaml:"push"`
 	LogLevel string    `yaml:"log_level"`
 }
 
@@ -48,6 +49,23 @@ type Allocine struct {
 	MaxRetries int           `yaml:"max_retries"`
 }
 
+// Push controls Web Push notifications for newly-released movies. Notifications
+// are sent only when both VAPID keys are set (see Enabled); otherwise the app
+// still installs as a PWA and works offline, just without notifications. Keys
+// are secrets and are normally supplied via POPCORN_VAPID_* env, not the file.
+type Push struct {
+	Subject           string `yaml:"subject"`            // VAPID contact, e.g. mailto:you@example.com
+	PublicKey         string `yaml:"public_key"`         // base64url VAPID public key (shared with browsers)
+	PrivateKey        string `yaml:"private_key"`        // base64url VAPID private key (secret)
+	SubscriptionsFile string `yaml:"subscriptions_file"` // where subscriptions are persisted
+}
+
+// Enabled reports whether push notifications are configured. Both keys are
+// required to sign and address push requests.
+func (p Push) Enabled() bool {
+	return p.PublicKey != "" && p.PrivateKey != ""
+}
+
 // Addr returns the host:port the server should listen on.
 func (s Server) Addr() string {
 	return fmt.Sprintf("%s:%d", s.Host, s.Port)
@@ -60,6 +78,7 @@ func defaults() Config {
 		Server:   Server{Host: "0.0.0.0", Port: 5000},
 		Refresh:  Refresh{Interval: 3 * time.Hour, Days: 7},
 		Allocine: Allocine{BaseURL: "https://www.allocine.fr", Timeout: 10 * time.Second, MaxRetries: 3},
+		Push:     Push{SubscriptionsFile: "subscriptions.json"},
 		LogLevel: "info",
 	}
 }
@@ -121,6 +140,20 @@ func (c *Config) applyEnv() error {
 	if v, ok := os.LookupEnv("POPCORN_LOG_LEVEL"); ok {
 		c.LogLevel = v
 	}
+	// VAPID keys are secrets, so the env path is the expected source in
+	// production (e.g. Woodpecker secrets); the file fields are mostly for dev.
+	if v, ok := os.LookupEnv("POPCORN_VAPID_SUBJECT"); ok {
+		c.Push.Subject = v
+	}
+	if v, ok := os.LookupEnv("POPCORN_VAPID_PUBLIC_KEY"); ok {
+		c.Push.PublicKey = v
+	}
+	if v, ok := os.LookupEnv("POPCORN_VAPID_PRIVATE_KEY"); ok {
+		c.Push.PrivateKey = v
+	}
+	if v, ok := os.LookupEnv("POPCORN_PUSH_SUBSCRIPTIONS_FILE"); ok {
+		c.Push.SubscriptionsFile = v
+	}
 	return nil
 }
 
@@ -147,6 +180,26 @@ func (c *Config) validate() error {
 	}
 	if c.Allocine.BaseURL == "" {
 		return fmt.Errorf("allocine.base_url is required")
+	}
+	if err := c.Push.validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validate guards against a half-configured push setup, which would silently
+// disable notifications or fail to sign requests.
+func (p Push) validate() error {
+	if (p.PublicKey == "") != (p.PrivateKey == "") {
+		return fmt.Errorf("push: public_key and private_key must both be set or both be empty")
+	}
+	if p.Enabled() {
+		if p.Subject == "" {
+			return fmt.Errorf("push: subject is required when VAPID keys are set")
+		}
+		if p.SubscriptionsFile == "" {
+			return fmt.Errorf("push: subscriptions_file is required when push is enabled")
+		}
 	}
 	return nil
 }

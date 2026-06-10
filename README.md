@@ -17,7 +17,9 @@ The interface is in French; the codebase and documentation are in English.
 - Background refresh with serve-stale: a failed fetch keeps the last good
   snapshot, and the server is available immediately on startup.
 - **Installable PWA**: add it to your phone's home screen and the app shell works
-  offline — see [docs/pwa.md](docs/pwa.md) for install instructions.
+  offline — see [docs/pwa.md](docs/pwa.md) for install instructions. Optional
+  **push notifications** alert you when new movies arrive — see
+  [docs/push-notifications.md](docs/push-notifications.md).
 - Single self-contained binary — templates and static assets are embedded via
   `go:embed`.
 

@@ -62,13 +62,14 @@ type Server struct {
 	days     int
 	engine   *gin.Engine
 	now      func() time.Time
-	assetVer string // cache-busting token derived from the CSS content
-	swJS     []byte // embedded service worker, served from the site root
+	assetVer string      // cache-busting token derived from the CSS content
+	push     PushService // optional; nil or disabled means no push endpoints
+	swJS     []byte      // embedded service worker, served from the site root
 }
 
 // NewServer builds the Gin engine, parses the embedded templates, and mounts
-// the embedded static assets.
-func NewServer(store *schedule.Store, days int, templatesFS, staticFS fs.FS) (*Server, error) {
+// the embedded static assets. push may be nil to disable notifications.
+func NewServer(store *schedule.Store, days int, templatesFS, staticFS fs.FS, push PushService) (*Server, error) {
 	gin.SetMode(gin.ReleaseMode)
 
 	// http.FileServer types files by extension; .webmanifest is not in Go's
@@ -100,22 +101,17 @@ func NewServer(store *schedule.Store, days int, templatesFS, staticFS fs.FS) (*S
 		engine:   engine,
 		now:      time.Now,
 		assetVer: assetVersion(staticFS),
+		push:     push,
 		swJS:     swJS,
 	}
 
 	engine.GET("/", s.home)
 	engine.GET("/health", s.health)
 	engine.GET("/sw.js", s.serviceWorker)
+	engine.GET("/push/vapid-public-key", s.vapidPublicKey)
+	engine.POST("/push/subscribe", s.subscribe)
+	engine.POST("/push/unsubscribe", s.unsubscribe)
 	return s, nil
-}
-
-// serviceWorker serves the embedded service worker from the site root. A worker
-// served from /static/ would only control the /static/ scope; serving it from
-// "/" with the Service-Worker-Allowed header lets it control the whole origin.
-func (s *Server) serviceWorker(c *gin.Context) {
-	c.Header("Service-Worker-Allowed", "/")
-	c.Header("Cache-Control", "no-cache")
-	c.Data(http.StatusOK, "text/javascript; charset=utf-8", s.swJS)
 }
 
 // assetVersion returns a short token that changes whenever the CSS changes, so
@@ -164,11 +160,12 @@ func (s *Server) home(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "base", gin.H{
-		"dates":    dates,
-		"days":     days,
-		"genres":   genres,
-		"selected": delta,
-		"assetVer": s.assetVer,
+		"dates":       dates,
+		"days":        days,
+		"genres":      genres,
+		"selected":    delta,
+		"assetVer":    s.assetVer,
+		"pushEnabled": s.pushEnabled(),
 	})
 }
 

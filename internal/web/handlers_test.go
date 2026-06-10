@@ -24,6 +24,11 @@ const indexTmpl = `{{define "body"}}` +
 
 func newTestServer(t *testing.T, store *schedule.Store, days int) *Server {
 	t.Helper()
+	return newTestServerWithPush(t, store, days, nil)
+}
+
+func newTestServerWithPush(t *testing.T, store *schedule.Store, days int, push PushService) *Server {
+	t.Helper()
 	templates := fstest.MapFS{
 		"base.html":  {Data: []byte(baseTmpl)},
 		"index.html": {Data: []byte(indexTmpl)},
@@ -33,7 +38,7 @@ func newTestServer(t *testing.T, store *schedule.Store, days int) *Server {
 		"js/sw.js":    {Data: []byte("// service worker")},
 	}
 
-	srv, err := NewServer(store, days, templates, static)
+	srv, err := NewServer(store, days, templates, static, push)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
