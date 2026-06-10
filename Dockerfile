@@ -18,7 +18,8 @@ FROM alpine:3.23
 # Europe/Paris wall-clock times, so the container must resolve that zone.
 # hadolint ignore=DL3018
 RUN apk add --no-cache ca-certificates tzdata && \
-    adduser -D -u 1000 app
+    adduser -D -u 1000 app && \
+    mkdir -p /app/data && chown app:app /app/data
 
 USER app
 WORKDIR /app
@@ -26,7 +27,13 @@ WORKDIR /app
 COPY --from=builder /bin/popcorn /bin/popcorn
 COPY config.example.yaml /app/config.yaml
 
-ENV TZ=Europe/Paris
+# Europe/Paris: showtimes are local wall-clock times.
+# /app/data holds push subscriptions (when push is enabled); mount a volume
+# there to persist them across container restarts.
+ENV TZ=Europe/Paris \
+    POPCORN_PUSH_SUBSCRIPTIONS_FILE=/app/data/subscriptions.json
+
+VOLUME ["/app/data"]
 
 EXPOSE 5000
 

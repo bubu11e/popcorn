@@ -11,7 +11,8 @@
     <link rel="preload" href="/static/font/Raleway-Black.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="stylesheet" href="/static/css/main.css?v={{.assetVer}}">
     <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
-    <link rel="apple-touch-icon" href="/static/images/favicon.svg">
+    <link rel="apple-touch-icon" href="/static/images/icon-192.png">
+    <link rel="manifest" href="/static/manifest.webmanifest">
     <title>🍿 Popcorn</title>
 </head>
 <body id="top">
@@ -24,6 +25,9 @@
                 </a>
             </h1>
             <p class="slogan">Quand tout fout le camp, il reste le grand écran… et le pop-corn.</p>
+            {{if .pushEnabled}}
+            <button type="button" id="notify-btn" class="notify" hidden>🔔 Activer les notifications</button>
+            {{end}}
         </div>
     </header>
 
@@ -38,6 +42,7 @@
             </p>
         </div>
     </footer>
+    <script defer src="/static/js/app.js?v={{.assetVer}}"></script>
 </body>
 </html>
 {{end}}

@@ -21,13 +21,14 @@ type Fetcher interface {
 // rolling date window from the current time on every cycle, so the "today"
 // index never drifts regardless of how long the process runs.
 type Refresher struct {
-	fetcher  Fetcher
-	theaters []allocine.Theater
-	days     int
-	interval time.Duration
-	store    *Store
-	logger   *slog.Logger
-	now      func() time.Time // injectable clock for tests
+	fetcher   Fetcher
+	theaters  []allocine.Theater
+	days      int
+	interval  time.Duration
+	store     *Store
+	logger    *slog.Logger
+	now       func() time.Time // injectable clock for tests
+	announcer Announcer        // optional; nil disables new-movie notifications
 }
 
 // NewRefresher wires a Refresher.
@@ -44,6 +45,14 @@ func NewRefresher(f Fetcher, theaters []allocine.Theater, days int, interval tim
 		logger:   logger,
 		now:      time.Now,
 	}
+}
+
+// WithAnnouncer attaches an Announcer that is told about movies newly entering
+// the window. It returns the refresher for chaining at wiring time. Passing nil
+// (or never calling this) leaves new-movie notifications disabled.
+func (r *Refresher) WithAnnouncer(a Announcer) *Refresher {
+	r.announcer = a
+	return r
 }
 
 // Run performs an initial refresh, then refreshes on every tick until the
@@ -102,7 +111,20 @@ func (r *Refresher) Refresh(ctx context.Context) {
 		return
 	}
 
+	// Capture the previous state before swapping, so we can announce only the
+	// movies that truly just appeared. The first successful snapshot is skipped
+	// (everything would look new on a cold start).
+	prev := r.store.Snapshot()
+	firstSnapshot := !r.store.Loaded()
 	r.store.Replace(days)
+
+	if r.announcer != nil && !firstSnapshot {
+		if added := NewMovies(prev, days); len(added) > 0 {
+			r.announcer.AnnounceNewMovies(ctx, added)
+			r.logger.Info("announced new movies", "count", len(added))
+		}
+	}
+
 	r.logger.Info("refresh complete",
 		"movies", total, "ok", okCount, "errors", errCount,
 		"duration", r.now().Sub(start).Round(time.Millisecond).String())

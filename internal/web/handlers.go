@@ -9,6 +9,7 @@ import (
 	"hash/crc32"
 	"html/template"
 	"io/fs"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -61,15 +62,26 @@ type Server struct {
 	days     int
 	engine   *gin.Engine
 	now      func() time.Time
-	assetVer string // cache-busting token derived from the CSS content
+	assetVer string      // cache-busting token derived from the CSS content
+	push     PushService // optional; nil or disabled means no push endpoints
+	swJS     []byte      // embedded service worker, served from the site root
 }
 
 // NewServer builds the Gin engine, parses the embedded templates, and mounts
-// the embedded static assets.
-func NewServer(store *schedule.Store, days int, templatesFS, staticFS fs.FS) (*Server, error) {
+// the embedded static assets. push may be nil to disable notifications.
+func NewServer(store *schedule.Store, days int, templatesFS, staticFS fs.FS, push PushService) (*Server, error) {
 	gin.SetMode(gin.ReleaseMode)
 
+	// http.FileServer types files by extension; .webmanifest is not in Go's
+	// default table, so register it for a correct Content-Type.
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
+
 	tmpl, err := template.New("").Funcs(templateFuncs).ParseFS(templatesFS, "*.html")
+	if err != nil {
+		return nil, err
+	}
+
+	swJS, err := fs.ReadFile(staticFS, "js/sw.js")
 	if err != nil {
 		return nil, err
 	}
@@ -89,10 +101,16 @@ func NewServer(store *schedule.Store, days int, templatesFS, staticFS fs.FS) (*S
 		engine:   engine,
 		now:      time.Now,
 		assetVer: assetVersion(staticFS),
+		push:     push,
+		swJS:     swJS,
 	}
 
 	engine.GET("/", s.home)
 	engine.GET("/health", s.health)
+	engine.GET("/sw.js", s.serviceWorker)
+	engine.GET("/push/vapid-public-key", s.vapidPublicKey)
+	engine.POST("/push/subscribe", s.subscribe)
+	engine.POST("/push/unsubscribe", s.unsubscribe)
 	return s, nil
 }
 
@@ -142,11 +160,12 @@ func (s *Server) home(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "base", gin.H{
-		"dates":    dates,
-		"days":     days,
-		"genres":   genres,
-		"selected": delta,
-		"assetVer": s.assetVer,
+		"dates":       dates,
+		"days":        days,
+		"genres":      genres,
+		"selected":    delta,
+		"assetVer":    s.assetVer,
+		"pushEnabled": s.pushEnabled(),
 	})
 }
 

@@ -44,12 +44,34 @@ serves a 7-day calendar. This document describes the Go implementation.
   transport errors, and tolerant parsing (missing `message` key, `no.showtime.error`,
   nil cast/credits, missing poster).
 - `internal/schedule` — `Aggregate` builds view models; `Store` holds the current
-  snapshot; `Refresher` keeps it fresh in the background.
-- `internal/web` — Gin handlers for `/` and `/health`, French locale helpers, and the
-  embedded templates/static assets.
-- `main.go` — wiring: load config, build the client, start the refresher goroutine and
-  HTTP server, handle graceful shutdown (SIGINT/SIGTERM). The container HEALTHCHECK
-  probes `/health` via wget.
+  snapshot; `Refresher` keeps it fresh in the background. `NewMovies` (in `diff.go`)
+  computes which titles a new snapshot adds; the `Announcer` interface is the optional
+  hook the refresher calls when that set is non-empty (suppressed on the first snapshot).
+- `internal/push` — Web Push: `SubscriptionStore` persists subscriptions to a JSON file
+  (atomic temp-file + rename), and `Notifier` delivers VAPID-signed notifications,
+  pruning subscriptions the push service reports as gone. `DigestPayload` builds the
+  single French "new films" message. This is the only stateful component.
+- `internal/web` — Gin handlers for `/`, `/health`, the service worker (`/sw.js`, served
+  from root so its scope is the whole origin) and the push API (`/push/vapid-public-key`,
+  `/push/subscribe`, `/push/unsubscribe`); French locale helpers; embedded templates and
+  static assets (incl. the web app manifest and icons).
+- `main.go` — wiring: load config, build the client, set up push (when VAPID keys are
+  present), start the refresher goroutine and HTTP server, handle graceful shutdown
+  (SIGINT/SIGTERM). The container HEALTHCHECK probes `/health` via wget. The `-genvapid`
+  flag prints a fresh VAPID key pair and exits.
+
+## Progressive Web App and push notifications
+
+Popcorn is installable and works offline: `static/manifest.webmanifest` plus a
+service worker (`static/js/sw.js`) precache the app shell and serve static assets with
+stale-while-revalidate, while navigations are network-first with a cached fallback.
+
+Push notifications are **optional and stateful**. When VAPID keys are configured, the
+refresher diffs each new snapshot against the previous one; genuinely new movies are
+handed to a `schedule.Announcer` (wired in `main.go` to `internal/push`), which sends one
+digest notification to every stored subscription. Without keys, the app still installs and
+runs offline — only the notification opt-in is hidden. Browsers require a secure context
+(HTTPS, except on localhost). See [push-notifications.md](push-notifications.md).
 
 ## Reliability and resilience
 
