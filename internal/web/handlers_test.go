@@ -28,7 +28,10 @@ func newTestServer(t *testing.T, store *schedule.Store, days int) *Server {
 		"base.html":  {Data: []byte(baseTmpl)},
 		"index.html": {Data: []byte(indexTmpl)},
 	}
-	static := fstest.MapFS{"placeholder": {Data: []byte("x")}}
+	static := fstest.MapFS{
+		"placeholder": {Data: []byte("x")},
+		"js/sw.js":    {Data: []byte("// service worker")},
+	}
 
 	srv, err := NewServer(store, days, templates, static)
 	if err != nil {

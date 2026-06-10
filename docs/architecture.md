@@ -45,11 +45,19 @@ serves a 7-day calendar. This document describes the Go implementation.
   nil cast/credits, missing poster).
 - `internal/schedule` — `Aggregate` builds view models; `Store` holds the current
   snapshot; `Refresher` keeps it fresh in the background.
-- `internal/web` — Gin handlers for `/` and `/health`, French locale helpers, and the
-  embedded templates/static assets.
+- `internal/web` — Gin handlers for `/`, `/health`, and the service worker (`/sw.js`,
+  served from root so its scope is the whole origin); French locale helpers; embedded
+  templates and static assets (incl. the web app manifest and icons).
 - `main.go` — wiring: load config, build the client, start the refresher goroutine and
   HTTP server, handle graceful shutdown (SIGINT/SIGTERM). The container HEALTHCHECK
   probes `/health` via wget.
+
+## Progressive Web App
+
+Popcorn is installable and works offline: `static/manifest.webmanifest` plus a
+service worker (`static/js/sw.js`) precache the app shell and serve static assets with
+stale-while-revalidate, while navigations are network-first with a cached fallback. The
+manifest, worker, and generated icons live in `static/` and are embedded via `go:embed`.
 
 ## Reliability and resilience
 

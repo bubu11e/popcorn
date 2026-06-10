@@ -9,6 +9,7 @@ import (
 	"hash/crc32"
 	"html/template"
 	"io/fs"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -62,6 +63,7 @@ type Server struct {
 	engine   *gin.Engine
 	now      func() time.Time
 	assetVer string // cache-busting token derived from the CSS content
+	swJS     []byte // embedded service worker, served from the site root
 }
 
 // NewServer builds the Gin engine, parses the embedded templates, and mounts
@@ -69,7 +71,16 @@ type Server struct {
 func NewServer(store *schedule.Store, days int, templatesFS, staticFS fs.FS) (*Server, error) {
 	gin.SetMode(gin.ReleaseMode)
 
+	// http.FileServer types files by extension; .webmanifest is not in Go's
+	// default table, so register it for a correct Content-Type.
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
+
 	tmpl, err := template.New("").Funcs(templateFuncs).ParseFS(templatesFS, "*.html")
+	if err != nil {
+		return nil, err
+	}
+
+	swJS, err := fs.ReadFile(staticFS, "js/sw.js")
 	if err != nil {
 		return nil, err
 	}
@@ -89,11 +100,22 @@ func NewServer(store *schedule.Store, days int, templatesFS, staticFS fs.FS) (*S
 		engine:   engine,
 		now:      time.Now,
 		assetVer: assetVersion(staticFS),
+		swJS:     swJS,
 	}
 
 	engine.GET("/", s.home)
 	engine.GET("/health", s.health)
+	engine.GET("/sw.js", s.serviceWorker)
 	return s, nil
+}
+
+// serviceWorker serves the embedded service worker from the site root. A worker
+// served from /static/ would only control the /static/ scope; serving it from
+// "/" with the Service-Worker-Allowed header lets it control the whole origin.
+func (s *Server) serviceWorker(c *gin.Context) {
+	c.Header("Service-Worker-Allowed", "/")
+	c.Header("Cache-Control", "no-cache")
+	c.Data(http.StatusOK, "text/javascript; charset=utf-8", s.swJS)
 }
 
 // assetVersion returns a short token that changes whenever the CSS changes, so
