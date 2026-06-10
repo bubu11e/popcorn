@@ -12,7 +12,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /bin/popcorn .
 
 # ---
 
-FROM alpine:3.23
+FROM alpine:3.24
 
 # ca-certificates: HTTPS calls to allocine.fr. tzdata + TZ: showtimes are
 # Europe/Paris wall-clock times, so the container must resolve that zone.
