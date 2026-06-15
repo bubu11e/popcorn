@@ -45,7 +45,7 @@ func TestAggregateGroupsByTheaterAndSortsTimes(t *testing.T) {
 		t.Fatalf("want 2 theaters, got %d", len(v.Seances))
 	}
 	// First theater (Ciné A) times sorted ascending.
-	if got := v.Seances[0].Horaires; got[0] != "14:00" || got[1] != "20:00" {
+	if got := v.Seances[0].Horaires; got[0].Heure != "14:00" || got[1].Heure != "20:00" {
 		t.Errorf("horaires not sorted: %v", got)
 	}
 	// Casting and genres are flattened to comma-joined strings.

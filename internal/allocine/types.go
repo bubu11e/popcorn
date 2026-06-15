@@ -33,9 +33,10 @@ type Movie struct {
 
 // Showtime is a single screening of a movie at a theater.
 type Showtime struct {
-	StartsAt time.Time
-	Theater  Theater
-	Movie    Movie
+	StartsAt  time.Time
+	Theater   Theater
+	Movie     Movie
+	Ticketing string // booking URL for this screening, empty if none
 }
 
 // apiResponse mirrors the JSON returned by the showtimes endpoint. Only the
@@ -61,6 +62,23 @@ const startsAtLayout = "2006-01-02T15:04:05"
 
 type apiSeance struct {
 	StartsAt string `json:"startsAt"`
+	Data     struct {
+		Ticketing []struct {
+			URLs []string `json:"urls"`
+		} `json:"ticketing"`
+	} `json:"data"`
+}
+
+// ticketingURL returns the first non-empty booking URL, or "" if none.
+func (s apiSeance) ticketingURL() string {
+	for _, t := range s.Data.Ticketing {
+		for _, u := range t.URLs {
+			if u != "" {
+				return u
+			}
+		}
+	}
+	return ""
 }
 
 // toShowtime parses the screening time and binds it to its theater and movie.
@@ -69,7 +87,7 @@ func (s apiSeance) toShowtime(theater Theater, movie Movie) (Showtime, error) {
 	if err != nil {
 		return Showtime{}, err
 	}
-	return Showtime{StartsAt: startsAt, Theater: theater, Movie: movie}, nil
+	return Showtime{StartsAt: startsAt, Theater: theater, Movie: movie, Ticketing: s.ticketingURL()}, nil
 }
 
 type apiMovie struct {
