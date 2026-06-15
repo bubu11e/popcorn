@@ -56,7 +56,7 @@
                         <div class="screening">
                             <span class="screening__where">{{.Cinema}}</span>
                             <div class="screening__slots">
-                                {{range .Horaires}}<span class="slot">{{.}}</span>{{end}}
+                                {{range .Horaires}}{{if .URL}}<a class="slot" href="{{.URL}}" target="_blank" rel="noopener">{{.Heure}}</a>{{else}}<span class="slot">{{.Heure}}</span>{{end}}{{end}}
                             </div>
                         </div>
                         {{end}}
