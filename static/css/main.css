@@ -452,6 +452,17 @@ a {
     border-radius: 999px;
 }
 
+a.slot {
+    text-decoration: none;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+a.slot:hover,
+a.slot:focus-visible {
+    background: color-mix(in srgb, var(--accent) 22%, var(--card));
+    border-color: var(--accent);
+}
+
 .blank {
     padding: 60px 0;
     color: var(--ink-soft);

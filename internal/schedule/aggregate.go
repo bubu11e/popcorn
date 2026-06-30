@@ -12,10 +12,16 @@ import (
 	"github.com/bubu11e/popcorn/internal/allocine"
 )
 
+// Slot is a single screening time and its booking link (empty if none).
+type Slot struct {
+	Heure string
+	URL   string
+}
+
 // Seance is the list of screening times for one movie at one theater.
 type Seance struct {
 	Cinema   string
-	Horaires []string
+	Horaires []Slot
 }
 
 // MovieView is a single movie card as consumed by the template. Field names are
@@ -75,14 +81,19 @@ func Aggregate(showtimes []allocine.Showtime) []MovieView {
 			a.view.Seances = append(a.view.Seances, Seance{Cinema: st.Theater.Name})
 			a.theaterIndex[st.Theater.Name] = idx
 		}
-		a.view.Seances[idx].Horaires = append(a.view.Seances[idx].Horaires, st.StartsAt.Format("15:04"))
+		a.view.Seances[idx].Horaires = append(a.view.Seances[idx].Horaires, Slot{
+			Heure: st.StartsAt.Format("15:04"),
+			URL:   st.Ticketing,
+		})
 	}
 
 	views := make([]MovieView, 0, len(order))
 	for _, title := range order {
 		v := byMovie[title].view
 		for i := range v.Seances {
-			sort.Strings(v.Seances[i].Horaires)
+			sort.Slice(v.Seances[i].Horaires, func(a, b int) bool {
+				return v.Seances[i].Horaires[a].Heure < v.Seances[i].Horaires[b].Heure
+			})
 		}
 		views = append(views, *v)
 	}
