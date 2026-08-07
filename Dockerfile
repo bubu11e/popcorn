@@ -30,7 +30,9 @@ RUN apk add --no-cache ca-certificates tzdata && \
     adduser -D -u 1000 app && \
     mkdir -p /app/data && chown app:app /app/data
 
-USER app
+# Numeric, so a host bind-mounting /app/data can resolve the owner without this
+# image's /etc/passwd (hadolint DL3066). Matches the uid/gid adduser created.
+USER 1000:1000
 WORKDIR /app
 
 COPY --from=builder /bin/popcorn /bin/popcorn
@@ -46,8 +48,9 @@ VOLUME ["/app/data"]
 
 EXPOSE 5000
 
-# Shell form so ${POPCORN_PORT} is honoured when the port is overridden.
+# Exec form (hadolint DL3025), but through sh -c: ${POPCORN_PORT} still has to be
+# expanded at runtime when the port is overridden, and exec form alone would not.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -qO- "http://localhost:${POPCORN_PORT:-5000}/health" >/dev/null 2>&1 || exit 1
+    CMD ["/bin/sh", "-c", "wget -qO- http://localhost:${POPCORN_PORT:-5000}/health >/dev/null 2>&1 || exit 1"]
 
 ENTRYPOINT ["/bin/popcorn"]
