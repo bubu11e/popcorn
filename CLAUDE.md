@@ -38,6 +38,9 @@ docker run -p 5000:5000 -v $PWD/config.yaml:/app/config.yaml popcorn
 ## Conventions and decisions
 
 - Domain vocabulary: [CONTEXT.md](CONTEXT.md).
+- Conventional Commits; explain the "why" in the body.
+- TDD; keep coverage >= 80%.
+- No emojis in code, comments, or docs.
 - Architecture decisions: [docs/adr/](docs/adr/).
 - The module path is `github.com/bubu11e/popcorn`, not the fleet-standard
   `forgejo.home.mpli.fr/julien/<name>`. Popcorn is the public repository, so its

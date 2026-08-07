@@ -71,7 +71,7 @@ furthest from the shared shape: the observability surface is largely absent.
 - [x] **Add `.editorconfig`** -- copy `crate/.editorconfig` verbatim so the fleet
       shares one indent/EOL policy: 4-space default, tabs for Go, 2 for
       YAML/JSON/TOML, and no trailing-whitespace trimming in Markdown.
-- [ ] **`CLAUDE.md` does not state the TDD / >= 80% coverage rule** that three
+- [x] **`CLAUDE.md` does not state the TDD / >= 80% coverage rule** that three
       siblings state explicitly. Either adopt it here or drop the claim fleet-wide.
 - [ ] **No `worker/`** -- fine if the scheduling model genuinely differs, but confirm
       it is a decision and not drift, and record it if so.
