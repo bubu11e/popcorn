@@ -51,10 +51,14 @@ serves a 7-day calendar. This document describes the Go implementation.
   (atomic temp-file + rename), and `Notifier` delivers VAPID-signed notifications,
   pruning subscriptions the push service reports as gone. `DigestPayload` builds the
   single French "new films" message. This is the only stateful component.
-- `internal/web` — Gin handlers for `/`, `/health`, the service worker (`/sw.js`, served
-  from root so its scope is the whole origin) and the push API (`/push/vapid-public-key`,
-  `/push/subscribe`, `/push/unsubscribe`); French locale helpers; embedded templates and
-  static assets (incl. the web app manifest and icons).
+- `internal/web` — Gin handlers for `/`, the operational endpoints (see below), the
+  service worker (`/sw.js`, served from root so its scope is the whole origin) and the
+  push API (`/push/vapid-public-key`, `/push/subscribe`, `/push/unsubscribe`); French
+  locale helpers; embedded templates and static assets (incl. the web app manifest and
+  icons).
+- `metrics` — the Prometheus metrics and the Gin middleware that records request count
+  and latency, labelled by the Gin route template so cardinality stays bounded.
+- `version` — build information; `Commit` is injected at build time via ldflags.
 - `main.go` — wiring: load config, build the client, set up push (when VAPID keys are
   present), start the refresher goroutine and HTTP server, handle graceful shutdown
   (SIGINT/SIGTERM). The container HEALTHCHECK probes `/health` via wget. The `-genvapid`

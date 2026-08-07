@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2024-2026 Julien Girard
 
-// Package web exposes the HTTP server: the home calendar page and a health
-// check, rendered with Gin over the in-memory schedule store.
+// Package web exposes the HTTP server: the home calendar page rendered with Gin
+// over the in-memory schedule store, plus the operational probes, Prometheus
+// metrics, and build information.
 package web
 
 import (
@@ -18,7 +19,11 @@ import (
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/bubu11e/popcorn/internal/schedule"
+	"github.com/bubu11e/popcorn/metrics"
+	"github.com/bubu11e/popcorn/version"
 )
 
 // staticMaxAge is the Cache-Control lifetime for embedded assets (CSS, fonts,
@@ -58,13 +63,15 @@ var templateFuncs = template.FuncMap{
 
 // Server holds the dependencies for the HTTP handlers.
 type Server struct {
-	store    *schedule.Store
-	days     int
-	engine   *gin.Engine
-	now      func() time.Time
-	assetVer string      // cache-busting token derived from the CSS content
-	push     PushService // optional; nil or disabled means no push endpoints
-	swJS     []byte      // embedded service worker, served from the site root
+	store     *schedule.Store
+	days      int
+	engine    *gin.Engine
+	now       func() time.Time
+	assetVer  string      // cache-busting token derived from the CSS content
+	push      PushService // optional; nil or disabled means no push endpoints
+	swJS      []byte      // embedded service worker, served from the site root
+	ready     func() bool // gates /ready; nil means always ready
+	buildInfo version.Info
 }
 
 // NewServer builds the Gin engine, parses the embedded templates, and mounts
@@ -91,22 +98,30 @@ func NewServer(store *schedule.Store, days int, templatesFS, staticFS fs.FS, pus
 	// Compress HTML/CSS responses; skip already-compressed binary assets.
 	engine.Use(gzip.Gzip(gzip.DefaultCompression,
 		gzip.WithExcludedExtensions([]string{".png", ".jpg", ".jpeg", ".svg", ".ico", ".ttf", ".otf"})))
+	engine.Use(metrics.Middleware())
 	engine.Use(staticCache)
 	engine.SetHTMLTemplate(tmpl)
 	engine.StaticFS("/static", http.FS(staticFS))
 
 	s := &Server{
-		store:    store,
-		days:     days,
-		engine:   engine,
-		now:      time.Now,
-		assetVer: assetVersion(staticFS),
-		push:     push,
-		swJS:     swJS,
+		store:     store,
+		days:      days,
+		engine:    engine,
+		now:       time.Now,
+		assetVer:  assetVersion(staticFS),
+		push:      push,
+		swJS:      swJS,
+		ready:     store.Loaded,
+		buildInfo: version.Get(),
 	}
 
 	engine.GET("/", s.home)
 	engine.GET("/health", s.health)
+	engine.GET("/live", s.health) // house-standard name for the same probe
+	engine.GET("/ready", s.readyz)
+	engine.GET("/version", s.version)
+	engine.GET("/api/v1/version", s.version)
+	engine.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	engine.GET("/sw.js", s.serviceWorker)
 	engine.GET("/push/vapid-public-key", s.vapidPublicKey)
 	engine.POST("/push/subscribe", s.subscribe)
@@ -126,10 +141,6 @@ func assetVersion(staticFS fs.FS) string {
 
 // Handler returns the underlying http.Handler.
 func (s *Server) Handler() http.Handler { return s.engine }
-
-func (s *Server) health(c *gin.Context) {
-	c.String(http.StatusOK, "OK")
-}
 
 func (s *Server) home(c *gin.Context) {
 	delta := clamp(intQuery(c, "delta"), 0, s.days-1)
