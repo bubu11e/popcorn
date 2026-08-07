@@ -4,6 +4,7 @@
 package push
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -78,5 +79,70 @@ func TestSubscriptionStoreLoadMissingFileIsEmpty(t *testing.T) {
 	}
 	if store.Len() != 0 {
 		t.Fatal("missing file should yield an empty store")
+	}
+}
+
+func TestSubscriptionStoreLoadSkipsEntriesWithoutAnEndpoint(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "subs.json")
+	body := `[{"endpoint":""},{"endpoint":"https://push.example/a","keys":{"auth":"a","p256dh":"p"}}]`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewSubscriptionStore(path)
+	if err := store.Load(); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	// An endpoint-less entry has no key and could never be delivered to.
+	if store.Len() != 1 {
+		t.Fatalf("Len = %d, want 1: the endpoint-less entry must be dropped", store.Len())
+	}
+}
+
+func TestSubscriptionStoreLoadRejectsCorruptFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "subs.json")
+	if err := os.WriteFile(path, []byte(`[{"endpoint":`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Starting with a silently empty set would drop every subscriber without
+	// anyone noticing, so a corrupt file must fail the load.
+	if err := NewSubscriptionStore(path).Load(); err == nil {
+		t.Fatal("expected an error for a corrupt subscriptions file")
+	}
+}
+
+func TestSubscriptionStoreLoadReportsUnreadablePath(t *testing.T) {
+	// A directory where the file should be: not "first run", a misconfiguration.
+	dir := t.TempDir()
+	if err := NewSubscriptionStore(dir).Load(); err == nil {
+		t.Fatal("expected an error when the subscriptions path is a directory")
+	}
+}
+
+func TestSubscriptionStoreAddReportsUnwritablePath(t *testing.T) {
+	// The parent is a regular file, so the store cannot create its directory.
+	base := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(base, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewSubscriptionStore(filepath.Join(base, "subs.json"))
+	if err := store.Add(Subscription{Endpoint: "https://push.example/a"}); err == nil {
+		t.Fatal("expected an error when the subscriptions file cannot be written")
+	}
+}
+
+func TestSubscriptionStoreAddReportsReadOnlyDirectory(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	dir := filepath.Join(t.TempDir(), "readonly")
+	if err := os.Mkdir(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewSubscriptionStore(filepath.Join(dir, "subs.json"))
+	if err := store.Add(Subscription{Endpoint: "https://push.example/a"}); err == nil {
+		t.Fatal("expected an error when the target directory is not writable")
 	}
 }

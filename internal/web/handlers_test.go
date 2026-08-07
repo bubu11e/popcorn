@@ -20,7 +20,8 @@ const indexTmpl = `{{define "body"}}` +
 	`{{range .dates}}<span class="day{{if .Choisi}} sel{{end}}">{{.Index}}</span>{{end}}` +
 	`{{range .genres}}<button class="genre" data-genre="{{.Slug}}">{{.Label}}</button>{{end}}` +
 	`{{range $i, $day := .days}}<section data-day="{{$i}}"{{if ne $i $.selected}} hidden{{end}}>` +
-	`{{range $day}}<article data-genres="{{genreSlugs .Genres}}"><h3>{{.Title}}</h3></article>{{end}}</section>{{end}}{{end}}`
+	`{{range $day}}<article data-genres="{{genreSlugs .Genres}}"><h3>{{.Title}}</h3>` +
+	`<p class="meta">{{joinComma .Genres}}</p></article>{{end}}</section>{{end}}{{end}}`
 
 func newTestServer(t *testing.T, store *schedule.Store, days int) *Server {
 	t.Helper()
@@ -148,6 +149,89 @@ func TestHomeRendersGenreFilter(t *testing.T) {
 	// Each card carries its genres as space-separated slugs for client filtering.
 	if !strings.Contains(body, `<article data-genres="comedie romance">`) {
 		t.Errorf("Film A should carry its genre slugs, body: %s", body)
+	}
+	// ...and the same list, human-readable, for display.
+	if !strings.Contains(body, `<p class="meta">Comédie, Romance</p>`) {
+		t.Errorf("Film A should display its genres joined, body: %s", body)
+	}
+}
+
+func TestNewServerRejectsUnparseableTemplates(t *testing.T) {
+	templates := fstest.MapFS{"base.html": {Data: []byte(`{{define "base"}}{{if}}{{end}}`)}}
+	static := fstest.MapFS{"js/sw.js": {Data: []byte("// sw")}}
+
+	if _, err := NewServer(schedule.NewStore(), 7, templates, static, nil); err == nil {
+		t.Fatal("expected an error for a template that does not parse")
+	}
+}
+
+func TestNewServerRequiresTheServiceWorker(t *testing.T) {
+	templates := fstest.MapFS{
+		"base.html":  {Data: []byte(baseTmpl)},
+		"index.html": {Data: []byte(indexTmpl)},
+	}
+	// The worker is served from the root, so it is read once at startup rather
+	// than per request: a missing one must fail the build, not 404 at runtime.
+	if _, err := NewServer(schedule.NewStore(), 7, templates, fstest.MapFS{}, nil); err == nil {
+		t.Fatal("expected an error when static/js/sw.js is absent")
+	}
+}
+
+func TestAssetVersionTracksCSSContent(t *testing.T) {
+	newWithCSS := func(css string) *Server {
+		t.Helper()
+		templates := fstest.MapFS{
+			"base.html":  {Data: []byte(baseTmpl)},
+			"index.html": {Data: []byte(indexTmpl)},
+		}
+		static := fstest.MapFS{
+			"js/sw.js":     {Data: []byte("// sw")},
+			"css/main.css": {Data: []byte(css)},
+		}
+		srv, err := NewServer(schedule.NewStore(), 1, templates, static, nil)
+		if err != nil {
+			t.Fatalf("NewServer: %v", err)
+		}
+		return srv
+	}
+
+	first := newWithCSS("body{color:red}").assetVer
+	same := newWithCSS("body{color:red}").assetVer
+	changed := newWithCSS("body{color:blue}").assetVer
+
+	if first == "dev" {
+		t.Error("assetVer should be derived from the CSS, not the fallback")
+	}
+	if first != same {
+		t.Errorf("same CSS gave %q then %q; the token must be stable across restarts", first, same)
+	}
+	if first == changed {
+		t.Error("changed CSS must change the token, or a deploy serves stale styles")
+	}
+}
+
+func TestStaticAssetsAreCacheable(t *testing.T) {
+	srv := newTestServer(t, schedule.NewStore(), 7)
+
+	rec := doGet(srv, "/static/placeholder")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != staticMaxAge {
+		t.Errorf("Cache-Control = %q, want %q", got, staticMaxAge)
+	}
+	// The page itself must not inherit it, or a deploy would never be seen.
+	if got := doGet(srv, "/").Header().Get("Cache-Control"); got != "" {
+		t.Errorf("home Cache-Control = %q, want unset", got)
+	}
+}
+
+func TestLocaleFallsBackOnOutOfRangeValues(t *testing.T) {
+	if got := translateMonth(time.Month(13)); got != "???" {
+		t.Errorf("translateMonth(13) = %q, want ???", got)
+	}
+	if got := translateDay(time.Weekday(9)); got != "???" {
+		t.Errorf("translateDay(9) = %q, want ???", got)
 	}
 }
 

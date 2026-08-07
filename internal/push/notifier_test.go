@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -129,6 +130,56 @@ func TestNotifierAccessors(t *testing.T) {
 	}
 	if store.Len() != 0 {
 		t.Fatal("Remove should reach the store")
+	}
+}
+
+func TestNotifierWithoutSubscriptionsSendsNothing(t *testing.T) {
+	var called atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called.Store(true)
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	store := NewSubscriptionStore(filepath.Join(t.TempDir(), "subs.json"))
+	newTestNotifier(t, store).Notify(context.Background(), []byte(`{"title":"hi"}`))
+
+	if called.Load() {
+		t.Fatal("no subscriptions means no request should leave the process")
+	}
+}
+
+func TestNotifierSurvivesAnUnreachableEndpoint(t *testing.T) {
+	var reached atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Add(1)
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	store := NewSubscriptionStore(filepath.Join(t.TempDir(), "subs.json"))
+	_ = store.Add(testSubscription(t, "http://127.0.0.1:1/dead")) // closed port
+	_ = store.Add(testSubscription(t, srv.URL+"/live"))
+
+	newTestNotifier(t, store).Notify(context.Background(), []byte(`{"title":"hi"}`))
+
+	if reached.Load() != 1 {
+		t.Fatalf("live endpoint hit %d times, want 1: one dead peer must not block the rest", reached.Load())
+	}
+	if store.Len() != 2 {
+		t.Fatalf("Len = %d, want 2: a transport failure is not proof the subscription is gone", store.Len())
+	}
+}
+
+func TestEndpointHostRedactsThePerDeviceToken(t *testing.T) {
+	// Push endpoints carry a device secret in the path; logs must keep only the
+	// host.
+	const endpoint = "https://fcm.googleapis.com/fcm/send/SECRET-DEVICE-TOKEN?k=v"
+	if got := endpointHost(endpoint); got != "fcm.googleapis.com" {
+		t.Errorf("endpointHost = %q, want the bare host", got)
+	}
+	if got := endpointHost("://not a url"); got != "invalid" {
+		t.Errorf("endpointHost of an unparseable endpoint = %q, want %q", got, "invalid")
 	}
 }
 

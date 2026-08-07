@@ -111,6 +111,34 @@ func TestRefreshUsesRollingWindowFromNow(t *testing.T) {
 	}
 }
 
+func TestRunRefreshesOnEveryTick(t *testing.T) {
+	f := &fakeFetcher{fallback: []allocine.Showtime{sampleShowtime("Film")}}
+	store := NewStore()
+	// One day, one theater, so each refresh is exactly one fetch.
+	r := NewRefresher(f, []allocine.Theater{{ID: "A"}}, 1, 10*time.Millisecond, store, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() { r.Run(ctx); close(done) }()
+
+	deadline := time.After(2 * time.Second)
+	for f.calls.Load() < 3 {
+		select {
+		case <-deadline:
+			t.Fatalf("only %d refreshes after 2s; the ticker is not driving Refresh", f.calls.Load())
+		case <-time.After(time.Millisecond):
+		}
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not return after context cancel")
+	}
+}
+
 func TestRunStopsOnContextCancel(t *testing.T) {
 	f := &fakeFetcher{fallback: []allocine.Showtime{sampleShowtime("Film")}}
 	store := NewStore()

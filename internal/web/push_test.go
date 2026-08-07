@@ -4,6 +4,7 @@
 package web
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,21 +14,30 @@ import (
 	"github.com/bubu11e/popcorn/internal/schedule"
 )
 
-// fakePush is a minimal in-memory PushService for handler tests.
+// fakePush is a minimal in-memory PushService for handler tests. addErr and
+// removeErr simulate a store that cannot reach its file.
 type fakePush struct {
 	enabled   bool
 	publicKey string
 	added     []push.Subscription
 	removed   []string
+	addErr    error
+	removeErr error
 }
 
 func (f *fakePush) Enabled() bool     { return f.enabled }
 func (f *fakePush) PublicKey() string { return f.publicKey }
 func (f *fakePush) Add(sub push.Subscription) error {
+	if f.addErr != nil {
+		return f.addErr
+	}
 	f.added = append(f.added, sub)
 	return nil
 }
 func (f *fakePush) Remove(endpoint string) error {
+	if f.removeErr != nil {
+		return f.removeErr
+	}
 	f.removed = append(f.removed, endpoint)
 	return nil
 }
@@ -113,9 +123,51 @@ func TestUnsubscribeRemovesSubscription(t *testing.T) {
 	}
 }
 
+func TestUnsubscribeRejectsInvalidBody(t *testing.T) {
+	fp := &fakePush{enabled: true}
+	srv := newTestServerWithPush(t, schedule.NewStore(), 7, fp)
+
+	for _, body := range []string{`not json`, `{}`} { // malformed, and missing endpoint
+		rec := doJSON(srv, http.MethodPost, "/push/unsubscribe", body)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("body %q: status = %d, want 400", body, rec.Code)
+		}
+	}
+	if len(fp.removed) != 0 {
+		t.Errorf("an unusable body must not remove anything: %+v", fp.removed)
+	}
+}
+
+func TestStoreFailuresSurfaceAs500(t *testing.T) {
+	fp := &fakePush{
+		enabled:   true,
+		addErr:    errors.New("disk full"),
+		removeErr: errors.New("disk full"),
+	}
+	srv := newTestServerWithPush(t, schedule.NewStore(), 7, fp)
+
+	// The browser must learn its subscription did not stick, so it can retry.
+	rec := doJSON(srv, http.MethodPost, "/push/subscribe", `{"endpoint":"https://push.example/a"}`)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("subscribe status = %d, want 500", rec.Code)
+	}
+	rec = doJSON(srv, http.MethodPost, "/push/unsubscribe", `{"endpoint":"https://push.example/a"}`)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("unsubscribe status = %d, want 500", rec.Code)
+	}
+}
+
 func TestSubscribeDisabledReturns404(t *testing.T) {
 	srv := newTestServerWithPush(t, schedule.NewStore(), 7, &fakePush{enabled: false})
 	rec := doJSON(srv, http.MethodPost, "/push/subscribe", `{"endpoint":"x"}`)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 when push disabled", rec.Code)
+	}
+}
+
+func TestUnsubscribeDisabledReturns404(t *testing.T) {
+	srv := newTestServerWithPush(t, schedule.NewStore(), 7, &fakePush{enabled: false})
+	rec := doJSON(srv, http.MethodPost, "/push/unsubscribe", `{"endpoint":"x"}`)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404 when push disabled", rec.Code)
 	}

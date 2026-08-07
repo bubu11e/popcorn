@@ -23,6 +23,8 @@ import (
 	"github.com/bubu11e/popcorn/internal/push"
 	"github.com/bubu11e/popcorn/internal/schedule"
 	"github.com/bubu11e/popcorn/internal/web"
+	"github.com/bubu11e/popcorn/metrics"
+	"github.com/bubu11e/popcorn/version"
 )
 
 //go:embed templates/*.html
@@ -54,6 +56,11 @@ func main() {
 
 	logger := newLogger(cfg.LogLevel)
 	slog.SetDefault(logger)
+
+	ver := version.Get()
+	metrics.BuildInfo.WithLabelValues(ver.Version, version.ShortCommit(ver.Commit), ver.GoVersion).Set(1)
+	logger.Info("starting popcorn",
+		"version", ver.Version, "commit", version.ShortCommit(ver.Commit), "go", ver.GoVersion)
 
 	templatesFS, err := fs.Sub(templatesEmbed, "templates")
 	if err != nil {

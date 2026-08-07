@@ -193,9 +193,46 @@ func TestPushValidationErrors(t *testing.T) {
 	}
 }
 
+func TestPushSubscriptionsFileRequiredWhenEnabled(t *testing.T) {
+	path := writeConfig(t, validYAML)
+	t.Setenv("POPCORN_VAPID_PUBLIC_KEY", "pub")
+	t.Setenv("POPCORN_VAPID_PRIVATE_KEY", "priv")
+	t.Setenv("POPCORN_VAPID_SUBJECT", "mailto:test@example.com")
+	t.Setenv("POPCORN_PUSH_SUBSCRIPTIONS_FILE", "")
+
+	// Enabled push with nowhere to persist would drop every subscription on
+	// restart, silently and permanently.
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected an error when push is enabled with an empty subscriptions_file")
+	}
+}
+
+func TestValidationRejectsUnusableRuntimeSettings(t *testing.T) {
+	cases := map[string]string{
+		"zero interval": "theaters:\n  - {internal_id: W1, name: X}\nrefresh:\n  interval: 0s\n",
+		"empty base_url": "theaters:\n  - {internal_id: W1, name: X}\n" +
+			"allocine:\n  base_url: \"\"\n",
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Load(writeConfig(t, body)); err == nil {
+				t.Errorf("expected a validation error for %q", name)
+			}
+		})
+	}
+}
+
 func TestLoadMissingFile(t *testing.T) {
 	if _, err := Load("/nonexistent/path/config.yaml"); err == nil {
 		t.Fatal("expected error for missing file")
+	}
+}
+
+func TestLoadMalformedYAML(t *testing.T) {
+	// A truncated or hand-mangled file must fail loudly rather than silently
+	// starting on defaults with no theaters.
+	if _, err := Load(writeConfig(t, "theaters: [{internal_id: W1\n")); err == nil {
+		t.Fatal("expected a parse error for malformed YAML")
 	}
 }
 
