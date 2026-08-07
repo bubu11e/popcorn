@@ -22,13 +22,13 @@ furthest from the shared shape: the observability surface is largely absent.
 
 ## High (Setup)
 
-- [ ] **No `/metrics` endpoint and no `metrics/` package** -- every other service
+- [x] **No `/metrics` endpoint and no `metrics/` package** -- every other service
       exposes Prometheus metrics: HTTP count and latency labelled by the Gin route
       template, plus `<name>_build_info` and `<name>_ready`. This service is the
       only one an operator cannot scrape.
-- [ ] **No `/ready` endpoint** -- only `/live` exists, so an orchestrator has no way
+- [x] **No `/ready` endpoint** -- only `/live` exists, so an orchestrator has no way
       to hold traffic while the service is not yet functional.
-- [ ] **No `/version` endpoint and no `version/` package** -- the deployed image
+- [x] **No `/version` endpoint and no `version/` package** -- the deployed image
       cannot report which commit it is running.
 - [x] **`.woodpecker.yml` does not pass `build_args_from_env: [CI_COMMIT_SHA]`** --
       the direct consequence of the item above: even once `version/` exists, the
