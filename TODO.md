@@ -52,14 +52,14 @@ furthest from the shared shape: the observability surface is largely absent.
       exception because it is the public one. Nothing to migrate here; the chore is
       writing the exception down (a line in `CLAUDE.md`, or an ADR once
       `docs/adr/` exists) so the next audit does not flag it as drift again.
-- [ ] **Add `.dockerignore`** -- the build context ships `data/` and the local binary
+- [x] **Add `.dockerignore`** -- the build context ships `data/` and the local binary
       into the daemon.
-- [ ] **Add the `check-merge-conflict` pre-commit hook** -- alongside the existing
+- [x] **Add the `check-merge-conflict` pre-commit hook** -- alongside the existing
       `pre-commit-hooks` entries:
       ```yaml
       - id: check-merge-conflict
       ```
-- [ ] **Add `.editorconfig`** -- copy `crate/.editorconfig` verbatim so the fleet
+- [x] **Add `.editorconfig`** -- copy `crate/.editorconfig` verbatim so the fleet
       shares one indent/EOL policy: 4-space default, tabs for Go, 2 for
       YAML/JSON/TOML, and no trailing-whitespace trimming in Markdown.
 - [ ] **`CLAUDE.md` does not state the TDD / >= 80% coverage rule** that three

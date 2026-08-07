@@ -1,0 +1,19 @@
+# Keep the build context lean and reproducible.
+.git
+.gitignore
+
+# Local runtime artifacts. /popcorn is the locally built binary; the image is
+# built from source, and config.example.yaml is the only config it needs.
+/popcorn
+/config.yaml
+/subscriptions.json
+/data/
+
+# Editor/CI noise not needed to build the image.
+.editorconfig
+.woodpecker.yml
+.pre-commit-config.yaml
+.golangci.yml
+.yamllint
+.github/
+docs/
