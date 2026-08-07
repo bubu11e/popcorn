@@ -7,8 +7,17 @@ RUN go mod download
 
 COPY . .
 
+# Commit is supplied at build time (the build context has no .git, so the Go
+# toolchain cannot embed vcs.revision itself). CI passes the Woodpecker built-in
+# CI_COMMIT_SHA via build_args_from_env; a manual
+# `docker build --build-arg COMMIT=$(git rev-parse HEAD)` works too.
+ARG CI_COMMIT_SHA=""
+ARG COMMIT="${CI_COMMIT_SHA}"
+
 # Static binary; templates and static assets are embedded via go:embed.
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /bin/popcorn .
+RUN CGO_ENABLED=0 go build -trimpath \
+    -ldflags="-s -w -X github.com/bubu11e/popcorn/version.Commit=${COMMIT}" \
+    -o /bin/popcorn .
 
 # ---
 

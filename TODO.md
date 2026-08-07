@@ -30,7 +30,7 @@ furthest from the shared shape: the observability surface is largely absent.
       to hold traffic while the service is not yet functional.
 - [ ] **No `/version` endpoint and no `version/` package** -- the deployed image
       cannot report which commit it is running.
-- [ ] **`.woodpecker.yml` does not pass `build_args_from_env: [CI_COMMIT_SHA]`** --
+- [x] **`.woodpecker.yml` does not pass `build_args_from_env: [CI_COMMIT_SHA]`** --
       the direct consequence of the item above: even once `version/` exists, the
       build context has no `.git`, so the commit must be injected via
       `-ldflags -X .../version.Commit=${COMMIT}`. Fix both together.
