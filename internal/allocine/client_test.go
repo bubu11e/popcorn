@@ -157,6 +157,155 @@ func TestGetShowtimesMissingMessageKey(t *testing.T) {
 	}
 }
 
+// newNoRetryClient points at h with retries disabled, so error-path tests do not
+// pay the 500ms-per-attempt backoff.
+func newNoRetryClient(t *testing.T, h http.HandlerFunc) *Client {
+	t.Helper()
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	return NewClient(srv.URL, 2*time.Second, 0, nil)
+}
+
+func TestGetShowtimesReportsAPIError(t *testing.T) {
+	// "error" carries a payload rather than false: a real failure, not "no
+	// screenings", so it must not be swallowed as an empty day.
+	c := newNoRetryClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `{"error":{"code":"boom"},"results":[],"pagination":{"page":"1","totalPages":1}}`)
+	})
+	_, err := c.GetShowtimes(context.Background(), Theater{ID: "W8560"}, time.Now())
+	if err == nil {
+		t.Fatal("expected an error when the API reports one")
+	}
+	if !strings.Contains(err.Error(), "W8560") {
+		t.Errorf("error = %v, want the theater id in it", err)
+	}
+}
+
+func TestGetShowtimesIgnoresErrorFalse(t *testing.T) {
+	// The API sends error:false on success; only a truthy value is a failure.
+	c := newNoRetryClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, onePageBody)
+	})
+	if _, err := c.GetShowtimes(context.Background(), Theater{ID: "X"}, time.Now()); err != nil {
+		t.Fatalf("error:false must not fail the fetch: %v", err)
+	}
+}
+
+func TestGetShowtimesSkipsUnparseableStartsAt(t *testing.T) {
+	// One bad timestamp must cost that screening only, not the whole theater-day.
+	c := newNoRetryClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `{"message":null,"results":[{"movie":{"internalId":1,"title":"A"},`+
+			`"showtimes":{"x":[{"startsAt":"pas une date"},{"startsAt":"2026-05-29T10:00:00"}]}}],`+
+			`"pagination":{"page":"1","totalPages":1}}`)
+	})
+
+	got, err := c.GetShowtimes(context.Background(), Theater{ID: "X"}, time.Now())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want the one parseable showtime, got %d", len(got))
+	}
+	if got[0].StartsAt.Hour() != 10 {
+		t.Errorf("StartsAt = %v, want the 10:00 screening", got[0].StartsAt)
+	}
+}
+
+func TestGetShowtimesRejects4xxWithoutRetrying(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+		// Longer than the 256-byte cap, so the wrapped message stays bounded.
+		_, _ = w.Write([]byte(strings.Repeat("x", 400)))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, 2*time.Second, 0, nil)
+	_, err := c.GetShowtimes(context.Background(), Theater{ID: "X"}, time.Now())
+	if err == nil {
+		t.Fatal("expected an error on 404")
+	}
+	if calls.Load() != 1 {
+		t.Errorf("attempts = %d, want 1: a 4xx is permanent", calls.Load())
+	}
+	if strings.Count(err.Error(), "x") > 300 {
+		t.Errorf("error body not truncated: %d chars", len(err.Error()))
+	}
+}
+
+func TestGetShowtimes4xxKeepsAShortBodyIntact(t *testing.T) {
+	c := newNoRetryClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte("rate limited"))
+	})
+	_, err := c.GetShowtimes(context.Background(), Theater{ID: "X"}, time.Now())
+	if err == nil {
+		t.Fatal("expected an error on 403")
+	}
+	if !strings.Contains(err.Error(), "rate limited") {
+		t.Errorf("error = %v, want the upstream body verbatim when it fits", err)
+	}
+}
+
+func TestGetShowtimesRejectsMalformedJSON(t *testing.T) {
+	c := newNoRetryClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `{"results": [`)
+	})
+	if _, err := c.GetShowtimes(context.Background(), Theater{ID: "X"}, time.Now()); err == nil {
+		t.Fatal("expected a parse error for a truncated body")
+	}
+}
+
+func TestGetShowtimesTruncatedBodyIsAnError(t *testing.T) {
+	// Content-Length promises more than the handler writes, so the client's read
+	// fails mid-body rather than yielding a short but valid payload.
+	c := newNoRetryClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "4096")
+		_, _ = w.Write([]byte(`{"results":[]}`))
+	})
+	if _, err := c.GetShowtimes(context.Background(), Theater{ID: "X"}, time.Now()); err == nil {
+		t.Fatal("expected an error when the body is cut short")
+	}
+}
+
+func TestGetShowtimesUnreachableHost(t *testing.T) {
+	c := NewClient("http://127.0.0.1:1", 500*time.Millisecond, 0, nil)
+	if _, err := c.GetShowtimes(context.Background(), Theater{ID: "X"}, time.Now()); err == nil {
+		t.Fatal("expected a transport error against a closed port")
+	}
+}
+
+func TestGetShowtimesUnbuildableURL(t *testing.T) {
+	// A base URL with a control character cannot become a request; the client
+	// must report that rather than panic while formatting the path.
+	c := NewClient("http://exa\x7fmple.invalid", time.Second, 0, nil)
+	if _, err := c.GetShowtimes(context.Background(), Theater{ID: "X"}, time.Now()); err == nil {
+		t.Fatal("expected an error for an unbuildable request URL")
+	}
+}
+
+func TestGetShowtimesStopsRetryingWhenContextIsCancelled(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	// Retries would sleep 500ms before the second attempt; the context expires
+	// first, so the call must return promptly instead of waiting it out.
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	c := NewClient(srv.URL, 2*time.Second, 5, nil)
+	start := time.Now()
+	if _, err := c.GetShowtimes(ctx, Theater{ID: "X"}, time.Now()); err == nil {
+		t.Fatal("expected an error once the context is cancelled")
+	}
+	if elapsed := time.Since(start); elapsed > 400*time.Millisecond {
+		t.Errorf("took %v: cancellation should abort the backoff, not ride it out", elapsed)
+	}
+}
+
 func TestGetShowtimesDirectorFallback(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, `{"message":null,"results":[{"movie":{"internalId":1,"title":"A","credits":[],"poster":null},"showtimes":{"x":[{"startsAt":"2026-05-29T10:00:00"}]}}],"pagination":{"page":"1","totalPages":1}}`)

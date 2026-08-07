@@ -34,9 +34,18 @@ furthest from the shared shape: the observability surface is largely absent.
       the direct consequence of the item above: even once `version/` exists, the
       build context has no `.git`, so the commit must be injected via
       `-ldflags -X .../version.Commit=${COMMIT}`. Fix both together.
-- [ ] **Test coverage is 76.3%, below the house >= 80%** -- `config`,
+- [x] **Test coverage is 76.3%, below the house >= 80%** -- `config`,
       `internal/allocine`, `internal/push`, `internal/schedule` and `internal/web`
       all sit under the bar.
+  - Measured 76.9% and now 87.9%. `config`, `internal/allocine`,
+    `internal/schedule` are at 100%, `internal/web` 99.2%, `internal/push` 95.9%.
+  - `main` stays at 31%: `main()` itself wires the process and calls `os.Exit`,
+    so it is left uncovered rather than refactored to chase the number. Its
+    testable pieces (`setupPush`, `printVAPIDKeys`, `newLogger`, `envOr`, the
+    push announcer) are covered.
+  - The uncovered remainder elsewhere is unreachable without injecting
+    filesystem faults mid-write (`SubscriptionStore.save`) or a transform error
+    that cannot occur on a valid Go string (`slugify`).
 
 ## Medium (Maintenance)
 
