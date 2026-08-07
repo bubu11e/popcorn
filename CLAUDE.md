@@ -41,6 +41,13 @@ docker run -p 5000:5000 -v $PWD/config.yaml:/app/config.yaml popcorn
 - Conventional Commits; explain the "why" in the body.
 - TDD; keep coverage >= 80%.
 - No emojis in code, comments, or docs.
+- Background work lives in `internal/schedule` (a `Refresher` on an interval),
+  not the fleet's generic `worker/`. It is named for what it does; the shape is
+  the same. Deliberate, not drift.
+- `printVAPIDKeys` in `main.go` is the one place that writes to stdout with
+  `fmt` rather than `slog`: it is a keygen subcommand emitting env-var
+  assignments for a secrets store, so stdout is the interface. It prints a
+  private key, so do not run it under a log collector.
 - Architecture decisions: [docs/adr/](docs/adr/).
 - The module path is `github.com/bubu11e/popcorn`, not the fleet-standard
   `forgejo.home.mpli.fr/julien/<name>`. Popcorn is the public repository, so its

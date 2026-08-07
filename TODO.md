@@ -73,14 +73,14 @@ furthest from the shared shape: the observability surface is largely absent.
       YAML/JSON/TOML, and no trailing-whitespace trimming in Markdown.
 - [x] **`CLAUDE.md` does not state the TDD / >= 80% coverage rule** that three
       siblings state explicitly. Either adopt it here or drop the claim fleet-wide.
-- [ ] **No `worker/`** -- fine if the scheduling model genuinely differs, but confirm
+- [x] **No `worker/`** -- fine if the scheduling model genuinely differs, but confirm
       it is a decision and not drift, and record it if so.
 
 `LICENSE` (GPL-3.0) is already present here, so nothing to do for it.
 
 ## Low (Review, likely intentional)
 
-- [ ] **`fmt.Printf` at `main.go:155`** -- the only non-`slog` output in the repo. It
+- [x] **`fmt.Printf` at `main.go:155`** -- the only non-`slog` output in the repo. It
       prints a generated VAPID keypair, including the private key, to stdout. That is
       the normal UX for a keygen subcommand, so this is probably correct; confirm the
       command is never run under a log collector that would persist the private key.
