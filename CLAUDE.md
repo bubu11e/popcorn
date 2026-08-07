@@ -35,6 +35,15 @@ docker run -p 5000:5000 popcorn        # uses baked-in config.yaml
 docker run -p 5000:5000 -v $PWD/config.yaml:/app/config.yaml popcorn
 ```
 
+## Conventions and decisions
+
+- Domain vocabulary: [CONTEXT.md](CONTEXT.md).
+- Architecture decisions: [docs/adr/](docs/adr/).
+- The module path is `github.com/bubu11e/popcorn`, not the fleet-standard
+  `forgejo.home.mpli.fr/julien/<name>`. Popcorn is the public repository, so its
+  path must resolve for an outside contributor. Deliberate, not drift; do not
+  migrate it (see [ADR 0002](docs/adr/0002-keep-the-public-github-module-path.md)).
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) for the full picture.

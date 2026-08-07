@@ -40,13 +40,13 @@ furthest from the shared shape: the observability surface is largely absent.
 
 ## Medium (Maintenance)
 
-- [ ] **No `CONTEXT.md`** -- five of six siblings carry a domain glossary. This repo
+- [x] **No `CONTEXT.md`** -- five of six siblings carry a domain glossary. This repo
       has real domain vocabulary (releases, watchlist, notification windows) that
       currently lives only in code.
-- [ ] **No `docs/adr/`** -- the non-obvious decisions here (server-rendered
+- [x] **No `docs/adr/`** -- the non-obvious decisions here (server-rendered
       templates instead of an embedded SPA; scraping instead of an API) are exactly
       what an ADR is for, and they are currently undocumented.
-- [ ] **Record why the module path stays on `github.com/bubu11e/popcorn`** --
+- [x] **Record why the module path stays on `github.com/bubu11e/popcorn`** --
       **decided 2026-08-02:** the fleet standard is
       `forgejo.home.mpli.fr/julien/<name>`, and this repo is the deliberate
       exception because it is the public one. Nothing to migrate here; the chore is
