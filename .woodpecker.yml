@@ -10,7 +10,7 @@ steps:
       - pre-commit run --all-files
 
   - name: test
-    image: golang:1.26
+    image: golang:1.27
     commands:
       - go mod tidy -diff
       - go test -race ./...
