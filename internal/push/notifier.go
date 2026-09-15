@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 )
@@ -23,7 +24,7 @@ type Notifier struct {
 	store      *SubscriptionStore
 	publicKey  string
 	privateKey string
-	subject    string // VAPID "sub": a mailto: or https: contact for the push service
+	subject    string // VAPID "sub" contact, without the mailto: prefix webpush-go adds
 	logger     *slog.Logger
 	client     webpush.HTTPClient // injectable for tests; nil uses the default client
 }
@@ -37,8 +38,12 @@ func NewNotifier(store *SubscriptionStore, publicKey, privateKey, subject string
 		store:      store,
 		publicKey:  publicKey,
 		privateKey: privateKey,
-		subject:    subject,
-		logger:     logger,
+		// webpush-go prepends "mailto:" to anything that is not an https URL, so the
+		// RFC 8292 form config.example.yaml documents would reach the service as
+		// "mailto:mailto:you@example.com". Apple rejects that JWT; Google and Mozilla
+		// ignore the claim, which is why only iOS goes quiet.
+		subject: strings.TrimPrefix(subject, "mailto:"),
+		logger:  logger,
 	}
 }
 

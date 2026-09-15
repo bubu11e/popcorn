@@ -8,12 +8,15 @@ import (
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // testSubscription builds a subscription with a valid P-256 public key and a
@@ -191,4 +194,63 @@ func TestNotifierEnabled(t *testing.T) {
 	if NewNotifier(nil, "", "", "", nil).Enabled() {
 		t.Fatal("notifier without keys must report disabled")
 	}
+}
+
+func TestNotifierSendsWellFormedSubject(t *testing.T) {
+	auth := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth <- r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	// webpush-go prepends "mailto:" to any subject that is not an https URL, so
+	// the RFC 8292 form config.example.yaml documents must reach it stripped or
+	// the JWT carries "mailto:mailto:...", which Apple rejects outright.
+	for _, tc := range []struct{ subject, want string }{
+		{"mailto:ops@example.com", "mailto:ops@example.com"},
+		{"ops@example.com", "mailto:ops@example.com"},
+		{"https://popcorn.example.com", "https://popcorn.example.com"},
+	} {
+		t.Run(tc.subject, func(t *testing.T) {
+			store := NewSubscriptionStore(filepath.Join(t.TempDir(), "subs.json"))
+			_ = store.Add(testSubscription(t, srv.URL+"/a"))
+			priv, pub, err := GenerateVAPIDKeys()
+			if err != nil {
+				t.Fatalf("vapid: %v", err)
+			}
+
+			NewNotifier(store, pub, priv, tc.subject, nil).Notify(context.Background(), []byte(`{"title":"hi"}`))
+
+			select {
+			case got := <-auth:
+				if sub := jwtSubject(t, got); sub != tc.want {
+					t.Errorf("JWT sub = %q, want %q", sub, tc.want)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("push service was not called")
+			}
+		})
+	}
+}
+
+// jwtSubject pulls the "sub" claim out of a VAPID Authorization header.
+func jwtSubject(t *testing.T, header string) string {
+	t.Helper()
+	token := strings.TrimPrefix(strings.Split(header, ",")[0], "vapid t=")
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		t.Fatalf("Authorization = %q, want a JWT", header)
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatalf("decode JWT claims: %v", err)
+	}
+	var claims struct {
+		Sub string `json:"sub"`
+	}
+	if err := json.Unmarshal(raw, &claims); err != nil {
+		t.Fatalf("unmarshal JWT claims: %v", err)
+	}
+	return claims.Sub
 }
