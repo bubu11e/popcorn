@@ -22,4 +22,17 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
+      # The hadolint hook is language: system, so the runner needs the binary.
+      - name: Install hadolint
+        env:
+          # renovate: datasource=github-releases packageName=hadolint/hadolint
+          HADOLINT_VERSION: v2.15.1
+        run: |
+          asset="hadolint-linux-$(uname -m | sed 's/aarch64/arm64/')"
+          base="https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VERSION}"
+          mkdir -p "$HOME/.local/bin" && cd "$HOME/.local/bin"
+          curl -sSfLO "${base}/${asset}"
+          curl -sSfL "${base}/checksums.sha256" | grep " \*${asset}$" | sha256sum -c -
+          install -m 0755 "${asset}" hadolint && rm "${asset}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - uses: pre-commit/action@v3.0.1
